@@ -1,0 +1,31 @@
+{
+  "name": "server_postgraphile",
+  "version": "1.0.0",
+  "description": "server is written by postgraphile",
+  "main": "server.js",
+  "scripts": {
+    "test": "sd",
+    "start": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phuongtinhbien/server_postgrapile.git"
+  },
+  "keywords": [
+    "postgraphilr"
+  ],
+  "author": "Phuong Vu",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/phuongtinhbien/server_postgrapile/issues"
+  },
+  "homepage": "https://github.com/phuongtinhbien/server_postgrapile#readme",
+  "dependencies": {
+    "express": "^4.16.3",
+    "graphile": "^4.0.0-rc.1",
+    "graphiql": "^0.12.0",
+    "nodemon": "^1.18.4",
+    "postgraphile": "^4.0.0-rc.5",
+    "postgraphile-plugin-connection-filter": "^1.0.0-beta.15"
+  }
+}
