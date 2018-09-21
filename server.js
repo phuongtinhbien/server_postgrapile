@@ -1,31 +1,70 @@
+require('dotenv').config();
 const { postgraphile} = require("postgraphile");
 const { createServer } = require("http");
 const express = require("express");
+const bodyParser = require('body-parser');
+const PostGraphileConnectionFilterPlugin = require("postgraphile-plugin-connection-filter");
 const app = express();
 const rawHTTPServer = createServer(app);
 
-const databaseUrl = "postgres://postgres:admin@127.0.0.1/laundry_schema"
-const postgraphileOptions = {
-  simpleSubscriptions: true,
-  graphiql: true,
-  websocketMiddlewares: 
-  [
-    // Add whatever middlewares you need here, note that
-    // they should only manipulate properties on req/res,
-    // they must not sent response data. e.g.:
-    //
-    //   require('express-session')(),
-    //   require('passport').initialize(),
-    //   require('passport').session(),
-  ]
-};
+// const databaseUrl = "postgres://postgres:admin@127.0.0.1/luandry_schema_21092018";
+// const postgraphileOptions = {
+//   simpleSubscriptions: true,
+//   graphiql: true,
+//   watchPg: true,
+//   jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
+//   jwtSecret: process.env.JWT_SECRET,
+//   pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE,
+//   appendPlugins: [PostGraphileConnectionFilterPlugin],
+  
+// };
 
-const postgraphileMiddleware = postgraphile(
-  databaseUrl,
-  "public",
-  postgraphileOptions
+const postgresConfig = {
+  user: process.env.POSTGRES_USERNAME,
+  password: process.env.POSTGRES_PASSWORD,
+  host: process.env.POSTGRES_HOST,
+  port: process.env.POSTGRES_PORT,
+  database: process.env.POSTGRES_DATABASE
+}
+// const postgraphileMiddleware = postgraphile(
+//   databaseUrl,
+//   "public",
+//   postgraphileOptions,
+// );
+
+app.use(function(req, res, next) {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
+});
+app.use(bodyParser.json());
+
+app.use(
+  bodyParser.urlencoded({
+    extended: true
+   })
 );
 
-app.use(postgraphileMiddleware);
+app.use(postgraphile(
+  postgresConfig,
+  process.env.POSTGRAPHILE_SCHEMA, {
+    graphiql: true,
+    watchPg: true,
+    jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
+    jwtSecret: process.env.JWT_SECRET,
+    pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE
+  }))
 
-rawHTTPServer.listen(parseInt(process.env.PORT, 10) || 3000);
+// app.use(postgraphileMiddleware);
+
+app.use(function (req, res, next) {
+  var err = new Error('Not Found');
+  err.status = 404;
+  next(err);
+});
+
+app.use(function (err, req, res, next) {
+  res.send('Error! ', err.message, ' ', (req.app.get('env') === 'development' ? err : {}));
+});
+
+app.listen(process.env.PORT);
