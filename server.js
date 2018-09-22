@@ -47,9 +47,10 @@ app.use(
 
 app.use(postgraphile(
   postgresConfig,
-  process.env.POSTGRAPHILE_SCHEMA, {
+  ['auth_public','public'], {
     graphiql: true,
     watchPg: true,
+    // schemaName:['auth_public','public'],
     jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
     jwtSecret: process.env.JWT_SECRET,
     pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE
@@ -67,4 +68,4 @@ app.use(function (err, req, res, next) {
   res.send('Error! ', err.message, ' ', (req.app.get('env') === 'development' ? err : {}));
 });
 
-app.listen(process.env.PORT);
+app.listen(3000);
