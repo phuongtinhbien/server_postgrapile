@@ -34,7 +34,8 @@ const postgresConfig = {
 
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Authorization" , "Bearer <token>");
   next();
 });
 app.use(bodyParser.json());
@@ -53,7 +54,8 @@ app.use(postgraphile(
     // schemaName:['auth_public','public'],
     jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
     jwtSecret: process.env.JWT_SECRET,
-    pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE
+    pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE,
+
   }))
 
 // app.use(postgraphileMiddleware);
