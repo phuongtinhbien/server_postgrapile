@@ -26,8 +26,11 @@
     "express": "^4.16.3",
     "graphile": "^4.0.0-rc.1",
     "graphiql": "^0.12.0",
+    "graphql-upload": "^8.0.0",
     "nodemon": "^1.18.4",
     "postgraphile": "^4.0.0-rc.5",
-    "postgraphile-plugin-connection-filter": "^1.0.0-beta.15"
+    "postgraphile-plugin-connection-filter": "^1.0.0-beta.15",
+    "postgraphile-plugin-derived-field": "^1.0.0-alpha.5",
+    "postgraphile-plugin-upload-field": "^1.0.0-alpha.8"
   }
 }

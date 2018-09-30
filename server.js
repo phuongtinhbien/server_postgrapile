@@ -3,21 +3,12 @@ const { postgraphile} = require("postgraphile");
 const { createServer } = require("http");
 const express = require("express");
 const bodyParser = require('body-parser');
-const PostGraphileConnectionFilterPlugin = require("postgraphile-plugin-connection-filter");
 const app = express();
-const rawHTTPServer = createServer(app);
+const fs = require("fs");
+const path = require("path");
+const PostGraphileUploadFieldPlugin = require("postgraphile-plugin-upload-field");
+const { graphqlUploadExpress } = require("graphql-upload");
 
-// const databaseUrl = "postgres://postgres:admin@127.0.0.1/luandry_schema_21092018";
-// const postgraphileOptions = {
-//   simpleSubscriptions: true,
-//   graphiql: true,
-//   watchPg: true,
-//   jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
-//   jwtSecret: process.env.JWT_SECRET,
-//   pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE,
-//   appendPlugins: [PostGraphileConnectionFilterPlugin],
-  
-// };
 
 const postgresConfig = {
   user: process.env.POSTGRES_USERNAME,
@@ -26,11 +17,13 @@ const postgresConfig = {
   port: process.env.POSTGRES_PORT,
   database: process.env.POSTGRES_DATABASE
 }
-// const postgraphileMiddleware = postgraphile(
-//   databaseUrl,
-//   "public",
-//   postgraphileOptions,
-// );
+const UPLOAD_DIR_NAME = "uploads";
+
+// Serve uploads as static resources
+app.use(`/${UPLOAD_DIR_NAME}`, express.static(path.resolve(UPLOAD_DIR_NAME)));
+
+// Attach multipart request handling middleware
+app.use(graphqlUploadExpress());
 
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
@@ -51,12 +44,24 @@ app.use(postgraphile(
   ['auth_public','public'], {
     graphiql: true,
     watchPg: true,
-    // schemaName:['auth_public','public'],
+    enableCors: true,
+    appendPlugins: [PostGraphileUploadFieldPlugin],
+    graphileBuildOptions: {
+      uploadFieldDefinitions: [
+        {
+          match: ({ schema, table, column, tags }) =>
+            schema === "public"&&
+            table === "post" &&
+            column === "header_image_file",
+          resolve: resolveUpload
+        }
+      ]
+    },
     jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
     jwtSecret: process.env.JWT_SECRET,
     pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE,
 
-  }))
+  }));
 
 // app.use(postgraphileMiddleware);
 
@@ -75,3 +80,30 @@ app.listen(5000,(err)=>{
     else
       console.log("successfully!!!");
 });
+
+async function resolveUpload(upload) {
+  const { filename, mimetype, encoding, createReadStream } = upload;
+  const stream = createReadStream();
+  // Save file to the local filesystem
+  const { id, filepath } = await saveLocal({ stream, filename });
+  // Return metadata to save it to Postgres
+  return filepath;
+}
+
+function saveLocal({ stream, filename }) {
+  const timestamp = new Date().toISOString().replace(/\D/g, "");
+  const id = `${timestamp}_${filename}`;
+  const filepath = path.join(UPLOAD_DIR_NAME, id);
+  const fsPath = path.join(process.cwd(), filepath);
+  return new Promise((resolve, reject) =>
+    stream
+      .on("error", error => {
+        if (stream.truncated)
+          // Delete the truncated file
+          fs.unlinkSync(fsPath);
+        reject(error);
+      })
+      .on("end", () => resolve({ id, filepath }))
+      .pipe(fs.createWriteStream(fsPath))
+  );
+}
