@@ -1,11 +1,11 @@
 require('dotenv').config();
-const { postgraphile} = require("postgraphile");
 const { createServer } = require("http");
 const express = require("express");
 const bodyParser = require('body-parser');
 const app = express();
 const fs = require("fs");
 const path = require("path");
+const { postgraphile} = require("postgraphile");
 const PostGraphileUploadFieldPlugin = require("postgraphile-plugin-upload-field");
 const { graphqlUploadExpress } = require("graphql-upload");
 
@@ -50,8 +50,6 @@ app.use(postgraphile(
       uploadFieldDefinitions: [
         {
           match: ({ schema, table, column, tags }) =>
-            schema === "public"&&
-            table === "post" &&
             column === "header_image_file",
           resolve: resolveUpload
         }
