@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const { postgraphile} = require("postgraphile");
 const PostGraphileUploadFieldPlugin = require("postgraphile-plugin-upload-field");
+const PostGraphileConnectionFilterPlugin = require("postgraphile-plugin-connection-filter");
 const { graphqlUploadExpress } = require("graphql-upload");
 
 
@@ -45,7 +46,7 @@ app.use(postgraphile(
     graphiql: true,
     watchPg: true,
     enableCors: true,
-    appendPlugins: [PostGraphileUploadFieldPlugin],
+    appendPlugins: [PostGraphileUploadFieldPlugin,PostGraphileConnectionFilterPlugin],
     graphileBuildOptions: {
       uploadFieldDefinitions: [
         {
