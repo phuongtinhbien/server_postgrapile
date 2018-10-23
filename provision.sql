@@ -195,4 +195,24 @@ GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.washing_machin
 
 GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.post TO auth_authenticated WITH GRANT OPTION;
 
+--Insert order and order detail
+create or replace function create_order_and_detail(o customer_order, d order_detail[]) returns customer_order as $$
+declare
+  i order_detail;
+begin
+  o.id = nextval('customer_order_seq');
+  o.create_date = now();
+  o.update_date = now();
+  insert into customer_order values (o.*) returning * into o;
+  foreach i in array d loop
+    i.id = nextval('order_detail_seq');
+    i.order_id = o.id;
+	i.create_date = now();
+  	i.update_date = now();
+    insert into order_detail values (i.*);
+  end loop;
+  return o;
+end;
+$$ language plpgsql volatile;
 
+GRANT EXECUTE ON FUNCTION create_order_and_detail(o customer_order, d order_detail[]) TO auth_authenticated; 
