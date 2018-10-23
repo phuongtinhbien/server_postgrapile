@@ -218,3 +218,18 @@ $$ language plpgsql volatile;
 GRANT EXECUTE ON FUNCTION create_order_and_detail(o customer_order, d order_detail[]) TO auth_authenticated; 
 GRANT ALL ON SEQUENCE public.customer_order_seq TO auth_authenticated;
 GRANT ALL ON SEQUENCE public.order_detail_seq TO auth_authenticated;
+
+--get amount money order
+create or replace function getAmountofOrderByCustomerId(customerId numeric) returns varchar as $$
+declare
+  i order_detail;
+  amount numeric;
+begin
+ SELECT SUM(od.amount) into amount from customer cu
+ inner join customer_order co on cu.id = co.customer_id
+ left join order_detail od on co.id = od.order_id
+ where cu.id = customerId;
+ 	
+  return amount::float8::numeric::money;
+end;
+$$ language plpgsql volatile;
