@@ -233,3 +233,6 @@ begin
   return amount::float8::numeric::money;
 end;
 $$ language plpgsql volatile;
+
+--GRANt for time_schedule_seq
+GRANT ALL ON SEQUENCE public.time_schedule_seq TO auth_authenticated;
