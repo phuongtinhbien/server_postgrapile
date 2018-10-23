@@ -216,3 +216,5 @@ end;
 $$ language plpgsql volatile;
 
 GRANT EXECUTE ON FUNCTION create_order_and_detail(o customer_order, d order_detail[]) TO auth_authenticated; 
+GRANT ALL ON SEQUENCE public.customer_order_seq TO auth_authenticated;
+GRANT ALL ON SEQUENCE public.order_detail_seq TO auth_authenticated;
