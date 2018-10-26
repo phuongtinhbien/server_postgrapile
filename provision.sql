@@ -309,10 +309,6 @@ GRANT EXECUTE ON FUNCTION updateReceiptAndDetail (p_re receipt, rd receipt_detai
 
 -- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
 
--- FUNCTION: public.updatestatuscustomerorder(numeric, character varying, numeric)
-
--- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
-
 CREATE OR REPLACE FUNCTION public.updatestatuscustomerorder(
 	co_id numeric,
 	p_status character varying,
@@ -330,6 +326,7 @@ declare
 	no_rec numeric;
 	r receipt;
 	co_status varchar;
+	task_order task;
 begin
 	select status into co_status from customer_order co where co.id = co_id;
 	update customer_order co set status = p_status where co.id = co_id;
@@ -337,8 +334,9 @@ begin
 	update order_detail od set status = p_status where od.order_id = co_id;
 	update order_detail od set update_date = now() where od.order_id = co_id;
 	select co.*  into o from customer_order co where co.id = co_id;
+	select * into task_order from task where task_type='TASK_CUSTOMER_ORDER' and customer_order = o.id;
 	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status)
-		values (p_user, null, 'TASK_CUSTOMER_ORDER', o.id, null, co_status, o.status);
+		values (p_user, task_order.current_staff, 'TASK_CUSTOMER_ORDER', o.id, null, co_status, o.status);
 	if o.status = 'APPROVED' then
 	begin
 		receipt_id = nextval ('receipt_seq');
@@ -374,6 +372,8 @@ GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character va
 GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO auth_authenticated;
 
 
-GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.bill TO auth_authenticated WITH GRANT OPTION;
+
+
+GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.task TO auth_authenticated WITH GRANT OPTION;
 
 GRANT ALL ON SEQUENCE public.task_id_seq TO auth_authenticated;
