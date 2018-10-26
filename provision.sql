@@ -309,6 +309,10 @@ GRANT EXECUTE ON FUNCTION updateReceiptAndDetail (p_re receipt, rd receipt_detai
 
 -- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
 
+-- FUNCTION: public.updatestatuscustomerorder(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
+
 CREATE OR REPLACE FUNCTION public.updatestatuscustomerorder(
 	co_id numeric,
 	p_status character varying,
@@ -325,7 +329,9 @@ declare
 	receipt_id numeric;
 	no_rec numeric;
 	r receipt;
+	co_status varchar;
 begin
+	select status into co_status from customer_order co where co.id = co_id;
 	update customer_order co set status = p_status where co.id = co_id;
 	update customer_order co set update_date = now() where co.id = co_id;
 	update order_detail od set status = p_status where od.order_id = co_id;
@@ -366,6 +372,7 @@ GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character va
 GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO auth_authenticated;
+
 
 GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.bill TO auth_authenticated WITH GRANT OPTION;
 
