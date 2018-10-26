@@ -203,12 +203,14 @@ begin
   o.id = nextval('customer_order_seq');
   o.create_date = now();
   o.update_date = now();
+  o.status = 'PENDING';
   insert into customer_order values (o.*) returning * into o;
   foreach i in array d loop
     i.id = nextval('order_detail_seq');
     i.order_id = o.id;
-	i.create_date = now();
+	  i.create_date = now();
   	i.update_date = now();
+    i.status = 'PENDING';
     insert into order_detail values (i.*);
   end loop;
   return o;
@@ -220,6 +222,7 @@ GRANT ALL ON SEQUENCE public.customer_order_seq TO auth_authenticated;
 GRANT ALL ON SEQUENCE public.order_detail_seq TO auth_authenticated;
 
 --get amount money order
+drop getAmountofOrderByCustomerId(customerId numeric, customerOrder numeric);
 create or replace function getAmountofOrderByCustomerId(customerId numeric, customerOrder numeric) returns varchar as $$
 declare
   i order_detail;
@@ -236,3 +239,132 @@ $$ language plpgsql volatile;
 
 --GRANt for time_schedule_seq
 GRANT ALL ON SEQUENCE public.time_schedule_seq TO auth_authenticated;
+
+-- approved
+create or replace function updateStatusCustomerOrder(co_id numeric, p_status varchar, p_user numeric ) returns customer_order as $$
+declare
+	o customer_order;
+	receipt_id numeric;
+	no_rec numeric;
+begin
+	update customer_order co set status = p_status where co.id = co_id;
+	update customer_order co set update_date = now() where co.id = co_id;
+	update order_detail od set status = p_status where od.order_id = co_id;
+	update order_detail od set update_date = now() where od.order_id = co_id;
+	select co.*  into o from customer_order co where co.id = co_id;
+	if o.status = 'APPROVED' then
+	begin
+		receipt_id = nextval ('receipt_seq');
+		insert into receipt (id, order_id, status, create_by, update_by)
+		values (receipt_id,o.id, 'PENDING', p_user,p_user);
+		select count(1) into no_rec from order_detail where order_id  = o.id;
+		if no_rec> 0 then
+		begin
+			insert into receipt_detail (
+				id, receipt_id, service_type_id, unit_id, label_id,
+				color_id, product_id, material_id, amount,create_by, update_by, status)
+			select nextval('receipt_detail_seq'),receipt_id, service_type_id, unit_id, label_id,
+				color_id, product_id, material_id, amount,p_user, p_user, 'PENDING'
+			from order_detail where order_id  = o.id;	
+		end;
+		end if;
+	end;
+	end if;
+  return o;
+end;
+$$ language plpgsql volatile;
+
+GRANT EXECUTE ON FUNCTION updateStatusCustomerOrder(co_id numeric, p_status varchar, p_user numeric ) TO auth_authenticated;
+GRANT ALL ON SEQUENCE public.receipt_seq TO auth_authenticated;
+GRANT ALL ON SEQUENCE public.receipt_detail_seq TO auth_authenticated;
+--update recceipt
+create or replace function updateReceiptAndDetail (p_re receipt, rd receipt_detail[]) returns receipt as $$
+declare
+  i receipt_detail;
+  r receipt;
+begin
+	select re.* into r from receipt re where re.id = p_re.id;
+  	if r is not null then
+		update receipt set (pick_up_time, delivery_time, update_by, update_date, status, pick_up_date,
+						   delivery_date, pick_up_place, delivery_place)
+		= (p_re.pick_up_time, p_re.delivery_time, p_re.update_by, p_re.update_date, p_re.status, p_re.pick_up_date,
+						   p_re.delivery_date, p_re.pick_up_place, p_re.delivery_place);			   
+	end if;
+	select re.* into r from receipt re where re.id = p_re.id;
+  	foreach i in array rd loop
+		i.update_date = now();
+		i.status = r.status;
+		update receipt_detail set (recieved_amount, status,  update_by, update_date)
+		= (i.recieved_amount, i.status, i.update_by,i.update_date);
+  	end loop;
+  return r;
+end;
+$$ language plpgsql volatile;
+
+GRANT EXECUTE ON FUNCTION updateReceiptAndDetail (p_re receipt, rd receipt_detail[]) TO auth_authenticated; 
+
+
+--UPDATE FUCNTION
+-- FUNCTION: public.updatestatuscustomerorder(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatuscustomerorder(
+	co_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	o customer_order;
+	receipt_id numeric;
+	no_rec numeric;
+	r receipt;
+begin
+	update customer_order co set status = p_status where co.id = co_id;
+	update customer_order co set update_date = now() where co.id = co_id;
+	update order_detail od set status = p_status where od.order_id = co_id;
+	update order_detail od set update_date = now() where od.order_id = co_id;
+	select co.*  into o from customer_order co where co.id = co_id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status)
+		values (p_user, null, 'TASK_CUSTOMER_ORDER', o.id, null, null, o.status);
+	if o.status = 'APPROVED' then
+	begin
+		receipt_id = nextval ('receipt_seq');
+		insert into receipt (id, order_id, status, create_by, update_by)
+		values (receipt_id,o.id, 'PENDING', p_user,p_user) returning * into r;
+		insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status)
+		values (p_user, null, 'TASK_RECEIPT', null,receipt_id , null, r.status);
+		select count(1) into no_rec from order_detail where order_id  = o.id;
+		if no_rec> 0 then
+		begin
+			insert into receipt_detail (
+				id, receipt_id, service_type_id, unit_id, label_id,
+				color_id, product_id, material_id, amount,create_by, update_by, status)
+			select nextval('receipt_detail_seq'),receipt_id, service_type_id, unit_id, label_id,
+				color_id, product_id, material_id, amount,p_user, p_user, 'PENDING'
+			from order_detail where order_id  = o.id;	
+		end;
+		end if;
+	end;
+	end if;
+  return o;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO auth_authenticated;
+
+GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.bill TO auth_authenticated WITH GRANT OPTION;
