@@ -338,7 +338,7 @@ begin
 	update order_detail od set update_date = now() where od.order_id = co_id;
 	select co.*  into o from customer_order co where co.id = co_id;
 	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status)
-		values (p_user, null, 'TASK_CUSTOMER_ORDER', o.id, null, null, o.status);
+		values (p_user, null, 'TASK_CUSTOMER_ORDER', o.id, null, co_status, o.status);
 	if o.status = 'APPROVED' then
 	begin
 		receipt_id = nextval ('receipt_seq');
