@@ -439,6 +439,38 @@ GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying,
 
 GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
 
+--27/10/2018
+
+-- FUNCTION: public.updatestatusofcustomerorderlist(numeric[], character varying, numeric)
+
+-- DROP FUNCTION public.updatestatusofcustomerorderlist(numeric[], character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatusofcustomerorderlist(
+	co_id numeric[],
+	p_status character varying,
+	p_user numeric)
+    RETURNS customer_order[]
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	i numeric;
+	res customer_order[];
+begin
+	foreach i in array co_id loop
+		perform updatestatuscustomerorder(i, p_status_p_user);
+	end loop;
+	select * into res from customer_order where id = co_id;
+  return res;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatusofcustomerorderlist(numeric[], character varying, numeric)
+    OWNER TO postgres;
 
 
 
