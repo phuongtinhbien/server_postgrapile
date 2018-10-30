@@ -58,6 +58,9 @@ app.use(postgraphile(
     },
     jwtPgTypeIdentifier: `${process.env.POSTGRAPHILE_SCHEMA}.jwt`,
     jwtSecret: process.env.JWT_SECRET,
+    jwtVerifyOptions:{
+      maxAge:999999999999999999999999
+    },
     pgDefaultRole: process.env.POSTGRAPHILE_DEFAULT_ROLE,
 
   }));
