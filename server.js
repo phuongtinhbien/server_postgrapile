@@ -46,7 +46,7 @@ app.use(postgraphile(
     graphiql: true,
     watchPg: true,
     enableCors: true,
-    appendPlugins: [PostGraphileUploadFieldPlugin,PostGraphileConnectionFilterPlugin],
+    appendPlugins: [PostGraphileConnectionFilterPlugin],
     graphileBuildOptions: {
       uploadFieldDefinitions: [
         {
