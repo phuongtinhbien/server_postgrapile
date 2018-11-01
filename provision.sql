@@ -474,3 +474,131 @@ ALTER FUNCTION public.updatestatusofcustomerorderlist(numeric[], character varyi
 
 
 
+--01/11/2018
+
+-- FUNCTION: public.updatestatuscustomerorder(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatuscustomerorder(
+	co_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	o customer_order;
+	receipt_id numeric;
+	no_rec numeric;
+	r receipt;
+	co_status varchar;
+	task_order task;
+begin
+	select status into co_status from customer_order co where co.id = co_id;
+	update customer_order co set status = p_status where co.id = co_id;
+	update customer_order co set update_date = now() where co.id = co_id;
+	update order_detail od set status = p_status where od.order_id = co_id;
+	update order_detail od set update_date = now() where od.order_id = co_id;
+	select co.*  into o from customer_order co where co.id = co_id;
+	select * into task_order from task where task_type='TASK_CUSTOMER_ORDER' and customer_order = o.id;
+	update task set PREVIOUS_TASK = 'Y' where task_type='TASK_CUSTOMER_ORDER' and customer_order = o.id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, task_order.current_staff, 'TASK_CUSTOMER_ORDER', o.id, null, co_status, o.status, 'N', o.branch_id);
+	if o.status = 'APPROVED' then
+		begin
+			receipt_id = nextval ('receipt_seq');
+			insert into receipt (id, order_id, status, create_by, update_by)
+			values (receipt_id,o.id, 'PENDING', p_user,p_user) returning * into r;
+			insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+			values (p_user, null, 'TASK_RECEIPT', null,receipt_id , null, r.status,'N',o.branch_id );
+			select count(1) into no_rec from order_detail where order_id  = o.id;
+			if no_rec> 0 then
+			begin
+				insert into receipt_detail (
+					id, receipt_id, service_type_id, unit_id, label_id,
+					color_id, product_id, material_id, amount,create_by, update_by, status)
+				select nextval('receipt_detail_seq'),receipt_id, service_type_id, unit_id, label_id,
+					color_id, product_id, material_id, amount,p_user, p_user, 'PENDING'
+				from order_detail where order_id  = o.id;	
+			end;
+			end if;
+		end;
+	elsif o.status = 'FINISHED_SERVING' then
+		begin
+		select * into r from receipt where order_id = o.id;
+		PERFORM updatestatusreceipt(r.id,'PENDING_DELIVERY', p_user);
+		end;
+	end if;
+  return o;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO auth_authenticated;
+
+--Receipt
+
+-- FUNCTION: public.updatestatusreceipt(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatusreceipt(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatusreceipt(
+	r_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	no_rec numeric;
+	r receipt;
+	r_status varchar;
+	r_task task;
+	branch numeric;
+begin
+	select re.* into r from receipt re where re.id = r_id;
+	select branch_id into branch from customer_order co inner join receipt re on re.order_id = co.id where re.id = r.id;
+	r_status := r.status;
+	select * into r_task from task where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update task set PREVIOUS_TASK = 'Y' where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update receipt set (status,update_date,update_by) = (p_status, now(),p_user) where id  = r_id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, r_task.current_staff, 'TASK_RECEIPT', null,r.id , r_task.current_status, p_status,'N', branch);
+	select * into r from receipt  where id = r_id;
+	if r.status = 'RECEIVED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'PENDING_SERVING',p_user );
+	ELSIF r.status = 'DELIVERIED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'FINISHED',p_user );
+	end if;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatusreceipt(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
+
+
+
