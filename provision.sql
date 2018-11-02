@@ -602,4 +602,68 @@ GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying,
 
 
 
---
+--02/11/2018
+GRANT ALL ON SEQUENCE public.staff_type_seq TO auth_authenticated;
+
+-- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.create_cus_order_and_detail(
+	cus customer,
+	o customer_order,
+	d order_detail[])
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  	i order_detail;
+	avai_customer customer;
+	u auth_public.user;
+begin
+	if cus is not null then
+		begin
+			select * into avai_customer from customer where email = cus.email or phone = cus.phone;
+			if avai_customer is not null then
+				o.customer_id = avai_customer.id;
+			end if;
+		end;
+	else 
+		begin
+			select auth_public.register_user (cus.full_name, null, cus.email, 'customer_type',null) into u;
+			update customer set (full_name, phone, status) = (cus.full_name, cus.phone,'ACTIVE') where id = u.id;
+			o.customer_id = u.id;
+			
+		end;
+	end if;
+	
+	
+  o.id = nextval('customer_order_seq');
+  o.create_date = now();
+  o.update_date = now();
+  insert into customer_order values (o.*) returning * into o;
+  foreach i in array d loop
+    i.id = nextval('order_detail_seq');
+    i.order_id = o.id;
+	i.create_date = now();
+  	i.update_date = now();
+    insert into order_detail values (i.*);
+  end loop;
+  return o;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
