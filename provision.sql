@@ -630,15 +630,16 @@ begin
 			select * into avai_customer from customer where email = cus.email or phone = cus.phone;
 			if avai_customer is not null then
 				o.customer_id = avai_customer.id;
-			end if;
-		end;
-	else 
-		begin
-			select auth_public.register_user (cus.full_name, null, cus.email, 'customer_type',null) into u;
-			update customer set (full_name, phone, status) = (cus.full_name, cus.phone,'ACTIVE') where id = u.id;
-			o.customer_id = u.id;
 			
-		end;
+			else 
+				begin
+					select auth_public.register_user (cus.full_name, null, cus.email, 'customer_type',null) into u;
+					update customer set (full_name, phone, status) = (cus.full_name, cus.phone,'ACTIVE') where id = u.id;
+					o.customer_id = u.id;
+
+				end;
+			end if;
+	end;
 	end if;
 	
 	
@@ -646,8 +647,10 @@ begin
   o.create_date = now();
   o.update_date = now();
   insert into customer_order values (o.*) returning * into o;
+	
   foreach i in array d loop
     i.id = nextval('order_detail_seq');
+	i.status = 'PENDING';
     i.order_id = o.id;
 	i.create_date = now();
   	i.update_date = now();
