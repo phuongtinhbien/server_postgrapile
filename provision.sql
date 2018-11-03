@@ -681,4 +681,50 @@ GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(customer, customer_
 
 CREATE POLICY insert_user ON auth_public.user FOR UPDATE TO auth_authenticated 
   with check (id in (select st.id from staff st inner join staff_type stp on stp.id = st.staff_type_id where stp.staff_code ='STAFF_01') and id = auth_public.current_user_id());
-		
+
+
+ --update recieved amount khi nhan do
+
+-- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.update_receipt_and_detail(
+	re receipt,
+	red receipt_detail[])
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  i receipt_detail;
+begin
+	update receipt set (update_date, update_by, pick_up_date, delivery_date,pick_up_time, delivery_time) 
+	=(re.update_date, re.update_by, re.pick_up_date, re.delivery_date,re.pick_up_time, re.delivery_time) where id = re.id;
+  foreach i in array red loop
+	update receipt set (update_date, update_by, recieved_amount) 
+	=(i.update_date, i.update_by, i.recieved_amount) where id = i.id;
+  end loop;
+  return re;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_receipt_and_detail(re receipt,
+	red receipt_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
+	red receipt_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
+	red receipt_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
+	red receipt_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
+
+ 
