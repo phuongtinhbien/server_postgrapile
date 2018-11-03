@@ -713,8 +713,8 @@ begin
 	select re.* into r from receipt re where re.id = p_re.id;
   	foreach i in array rd loop
 		i.update_date = now();
-		update receipt_detail set (recieved_amount, status,  update_by, update_date)
-		= (i.recieved_amount, i.status, i.update_by,i.update_date);
+		update receipt_detail set (recieved_amount,  update_by, update_date)
+		= (i.recieved_amount, i.update_by,i.update_date) where id = i.id;
   	end loop;
   return r;
 end;
@@ -729,6 +729,8 @@ GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[
 GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO auth_authenticated;
+
+
 
 
 
