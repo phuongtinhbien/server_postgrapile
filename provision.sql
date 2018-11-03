@@ -685,13 +685,13 @@ CREATE POLICY insert_user ON auth_public.user FOR UPDATE TO auth_authenticated
 
  --update recieved amount khi nhan do
 
--- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+-- FUNCTION: public.updatereceiptanddetail(receipt, receipt_detail[])
 
--- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+-- DROP FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]);
 
-CREATE OR REPLACE FUNCTION public.update_receipt_and_detail(
-	re receipt,
-	red receipt_detail[])
+CREATE OR REPLACE FUNCTION public.updatereceiptanddetail(
+	p_re receipt,
+	rd receipt_detail[])
     RETURNS receipt
     LANGUAGE 'plpgsql'
 
@@ -701,30 +701,37 @@ AS $BODY$
 
 declare
   i receipt_detail;
+  r receipt;
 begin
-	update receipt set (update_date, update_by, pick_up_date, delivery_date,pick_up_time, delivery_time) 
-	=(re.update_date, re.update_by, re.pick_up_date, re.delivery_date,re.pick_up_time, re.delivery_time) where id = re.id;
-  foreach i in array red loop
-	update receipt set (update_date, update_by, recieved_amount) 
-	=(i.update_date, i.update_by, i.recieved_amount) where id = i.id;
-  end loop;
-  return re;
+	select re.* into r from receipt re where re.id = p_re.id;
+
+	update receipt set (pick_up_time, delivery_time, update_by, update_date,  pick_up_date,
+					   delivery_date, pick_up_place, delivery_place)
+	= (p_re.pick_up_time, p_re.delivery_time, p_re.update_by, p_re.update_date,  p_re.pick_up_date,
+					   p_re.delivery_date, p_re.pick_up_place, p_re.delivery_place);			   
+
+	select re.* into r from receipt re where re.id = p_re.id;
+  	foreach i in array rd loop
+		i.update_date = now();
+		update receipt_detail set (recieved_amount, status,  update_by, update_date)
+		= (i.recieved_amount, i.status, i.update_by,i.update_date);
+  	end loop;
+  return r;
 end;
 
 $BODY$;
 
-ALTER FUNCTION public.update_receipt_and_detail(re receipt,
-	red receipt_detail[])
+ALTER FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[])
     OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
-	red receipt_detail[]) TO postgres;
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
-	red receipt_detail[]) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO PUBLIC;
 
-GRANT EXECUTE ON FUNCTION public.update_receipt_and_detail(re receipt,
-	red receipt_detail[]) TO auth_authenticated WITH GRANT OPTION;
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO auth_authenticated;
+
+
+
 
 
  
