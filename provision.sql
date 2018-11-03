@@ -605,9 +605,11 @@ GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying,
 --02/11/2018
 GRANT ALL ON SEQUENCE public.staff_type_seq TO auth_authenticated;
 
--- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
 
--- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+--03/11/2018
+REVOKE ALL ON SEQUENCE auth_public.user_id_seq FROM auth_anonymous;
+GRANT ALL ON SEQUENCE auth_public.user_id_seq TO auth_authenticated;
 
 CREATE OR REPLACE FUNCTION public.create_cus_order_and_detail(
 	cus customer,
@@ -623,34 +625,40 @@ AS $BODY$
 declare
   	i order_detail;
 	avai_customer customer;
-	u auth_public.user;
+	new_user auth_public.user;
+	unit_price numeric;
 begin
-	if cus is not null then
-		begin
-			select * into avai_customer from customer where email = cus.email or phone = cus.phone;
-			if avai_customer is not null then
-				o.customer_id = avai_customer.id;
-			
-			else 
-				begin
-					select auth_public.register_user (cus.full_name, null, cus.email, 'customer_type',null) into u;
-					update customer set (full_name, phone, status) = (cus.full_name, cus.phone,'ACTIVE') where id = u.id;
-					o.customer_id = u.id;
 
-				end;
-			end if;
+	select * into avai_customer from customer c where c.email = cus.email;
+	o.customer_id = avai_customer.id;
+	if avai_customer is null then
+	begin
+		new_user = auth_public."register_user" (cus.full_name, ' ', cus.email, 'customer_type','password1');
+		update customer set (full_name, phone, status, create_by, update_by) = (cus.full_name, cus.phone,true, cus.create_by, cus.update_by) where id = new_user.id;
+		o.customer_id = new_user.id;
+
 	end;
 	end if;
-	
 	
   o.id = nextval('customer_order_seq');
   o.create_date = now();
   o.update_date = now();
+	o.status='DRAFT';
   insert into customer_order values (o.*) returning * into o;
 	
   foreach i in array d loop
     i.id = nextval('order_detail_seq');
-	i.status = 'PENDING';
+	i.status = 'DRAFT';
+	select id into unit_price
+	from unit_price
+	where product_id = i.product_id
+	and service_type_id = i.service_type_id 
+	and unit_id = i.unit_id
+	and apply_date = (select max(apply_date) from unit_price
+	where product_id = i.product_id
+	and service_type_id = i.service_type_id 
+	and unit_id = i.unit_id);
+	i.unit_price = unit_price;
     i.order_id = o.id;
 	i.create_date = now();
   	i.update_date = now();
@@ -661,12 +669,15 @@ end;
 
 $BODY$;
 
-ALTER FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[])
+ALTER FUNCTION public.create_cus_order_and_detail(customer, customer_order, order_detail[])
     OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO postgres;
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(customer, customer_order, order_detail[]) TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(customer, customer_order, order_detail[]) TO PUBLIC;
 
-GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(cus customer,customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
+GRANT EXECUTE ON FUNCTION public.create_cus_order_and_detail(customer, customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
 
+CREATE POLICY insert_user ON auth_public.user FOR UPDATE TO auth_authenticated 
+  with check (id in (select st.id from staff st inner join staff_type stp on stp.id = st.staff_type_id where stp.staff_code ='STAFF_01') and id = auth_public.current_user_id());
+		
