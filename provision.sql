@@ -657,7 +657,8 @@ begin
 	and apply_date = (select max(apply_date) from unit_price
 	where product_id = i.product_id
 	and service_type_id = i.service_type_id 
-	and unit_id = i.unit_id);
+	and unit_id = i.unit_id
+	and status = 'ACTIVE');
 	i.unit_price = unit_price;
     i.order_id = o.id;
 	i.create_date = now();
