@@ -806,6 +806,78 @@ GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character va
 
 
 
+--07/11/2018
+GRANT ALL ON SEQUENCE public.wash_bag_seq TO auth_authenticated;
+GRANT ALL ON SEQUENCE public.wash_bag_detail_seq TO auth_authenticated;
+
+-- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.create_wash_bag_for_receipt(
+	re_id numeric,
+	curr_user numeric,
+	wash_code numeric[],
+	wb wash_bag_detail[])
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	rec receipt;
+	new_id numeric;
+	e wash_bag_detail;
+	i numeric;
+begin
+	foreach i in array wash_code loop
+	begin
+		new_id = nextVal('wash_bag_seq');
+		insert into wash_bag values (new_id, 'WB_'||new_id,curr_user,curr_user, now(), now(), 'ACTIVE', re_id);
+		foreach e in array wb loop
+		begin
+			if e.wash_bag_id = i then
+				insert into wash_bag_detail (wash_bag_id, service_type_id, unit_id, label_id, 
+											 color_id, product_id, material_id, amount,create_by, update_by, status)
+											 values (new_id, e.service_type_id, e.unit_id, e.label_id, e.color_id,
+													e.product_id, e.material_id, e.amount, curr_user, curr_user, 'ACTIVE');
+			end if;
+		end;
+		end loop;
+	end;
+	end loop;
+	select * into rec from receipt where id = re_id;
+	return rec;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.create_wash_bag_for_receipt(
+	re_id numeric,
+	curr_user numeric,
+	wash_code numeric[],
+	wb wash_bag_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+	re_id numeric,
+	curr_user numeric,
+	wash_code numeric[],
+	wb wash_bag_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+	re_id numeric,
+	curr_user numeric,
+	wash_code numeric[],
+	wb wash_bag_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+	re_id numeric,
+	curr_user numeric,
+	wash_code numeric[],
+	wb wash_bag_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
 
 
 
