@@ -943,7 +943,7 @@ AS $BODY$
 	inner join washing_machine wm on w.washing_machine_id = wm.id
 	inner join receipt re on wb.receipt_id = re.id
 	inner join customer_order co on re.order_id = co.id
-	where w.status = 'PENDING_SERVING' and co.branch_id = 2
+	where w.status in ('PENDING_SERVING','SERVING') and co.branch_id = 2
 
 $BODY$;
 
@@ -957,8 +957,197 @@ GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO auth_authenticated;
 
 
+-- FUNCTION: public.update_wash(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.update_wash(numeric, character varying, numeric);
+
+-- FUNCTION: public.update_wash(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.update_wash(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.update_wash(
+	co_id numeric,
+	stt character varying,
+	update_user numeric)
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  co customer_order;
+  re receipt;
+  i numeric;
+  wb_id numeric[];
+begin
+	select * into co from customer_order where id = co_id;
+	select * into re from receipt where order_id = co.id;
+	wb_id = ARRAY(select id from wash_bag where receipt_id  = re.id);
+	foreach i in array wb_id loop
+	begin
+		update wash set (status,update_by, update_date) = (stt,update_user,now()) where wash_bag_id = i;
+	end;
+	end loop;
+  return co;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_wash(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_wash(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_wash(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_wash(numeric, character varying, numeric) TO auth_authenticated;
 
 
 
 
- 
+
+
+
+
+
+ -- FUNCTION: public.updatestatuscustomerorder(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatuscustomerorder(
+	co_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	o customer_order;
+	receipt_id numeric;
+	no_rec numeric;
+	r receipt;
+	co_status varchar;
+	task_order task;
+begin
+	select status into co_status from customer_order co where co.id = co_id;
+	update customer_order co set status = p_status where co.id = co_id;
+	update customer_order co set update_date = now() where co.id = co_id;
+	update order_detail od set status = p_status where od.order_id = co_id;
+	update order_detail od set update_date = now() where od.order_id = co_id;
+	select co.*  into o from customer_order co where co.id = co_id;
+	select * into task_order from task where task_type='TASK_CUSTOMER_ORDER' and customer_order = o.id;
+	update task set PREVIOUS_TASK = 'Y' where task_type='TASK_CUSTOMER_ORDER' and customer_order = o.id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, task_order.current_staff, 'TASK_CUSTOMER_ORDER', o.id, null, co_status, o.status, 'N', o.branch_id);
+	if o.status = 'APPROVED' then
+		begin
+			receipt_id = nextval ('receipt_seq');
+			insert into receipt (id, order_id, status, create_by, update_by)
+			values (receipt_id,o.id, 'PENDING', p_user,p_user) returning * into r;
+			insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+			values (p_user, null, 'TASK_RECEIPT', null,receipt_id , null, r.status,'N',o.branch_id );
+			select count(1) into no_rec from order_detail where order_id  = o.id;
+			if no_rec> 0 then
+			begin
+				insert into receipt_detail (
+					id, receipt_id, service_type_id, unit_id, label_id,
+					color_id, product_id, material_id, amount,create_by, update_by, status,unit_price)
+				select nextval('receipt_detail_seq'),receipt_id, service_type_id, unit_id, label_id,
+					color_id, product_id, material_id, amount,p_user, p_user, 'PENDING', unit_price
+				from order_detail where order_id  = o.id;	
+			end;
+			end if;
+		end;
+	elsif o.status = 'FINISHED_SERVING' then
+		begin
+		select * into r from receipt where order_id = o.id;
+		PERFORM updatestatusreceipt(r.id,'PENDING_DELIVERY', p_user);
+		end;
+	end if;
+	if o.status = 'PENDING_SERVING' or o.status = 'SERVING' or o.status = 'FINISHED_SERVING' then
+		PERFORM update_wash (o.id,o.status, p_user );
+	end if;
+  return o;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatuscustomerorder(numeric, character varying, numeric) TO auth_authenticated;
+
+
+-- FUNCTION: public.getproductprice(unit_price)
+
+-- DROP FUNCTION public.getproductprice(unit_price);
+
+CREATE OR REPLACE FUNCTION public.getproductprice(
+	unitprice unit_price)
+    RETURNS unit_price
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+AS $BODY$
+
+    select *
+	from unit_price
+	where product_id = unitPrice.product_id
+	and service_type_id = unitPrice.service_type_id 
+	and unit_id = unitPrice.unit_id
+	and apply_date = (select max(apply_date) from unit_price
+	where product_id = unitPrice.product_id
+	and service_type_id = unitPrice.service_type_id 
+	and unit_id = unitPrice.unit_id
+	and status = 'ACTIVE');
+  
+$BODY$;
+
+ALTER FUNCTION public.getproductprice(unit_price)
+    OWNER TO postgres;
+
+
+-- FUNCTION: public.getlistproductprice(unit_price[])
+
+-- DROP FUNCTION public.getlistproductprice(unit_price[]);
+
+CREATE OR REPLACE FUNCTION public.getlistproductprice(
+	unitprice unit_price[])
+    RETURNS unit_price
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	res unit_price[];
+	i unit_price;
+	new_unit_price unit_price;
+begin
+	foreach i in array unitPrice loop
+		select * into new_unit_price from getProductPrice (i);
+		res = array_append(res,new_unit_price);								   
+   end loop;
+	return res;												 
+end;
+												
+									   
+
+$BODY$;
+
+ALTER FUNCTION public.getlistproductprice(unit_price[])
+    OWNER TO postgres;
+
+
