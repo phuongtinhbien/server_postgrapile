@@ -814,6 +814,10 @@ GRANT ALL ON SEQUENCE public.wash_bag_detail_seq TO auth_authenticated;
 
 -- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
 
+-- FUNCTION: public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[])
+
+-- DROP FUNCTION public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[]);
+
 CREATE OR REPLACE FUNCTION public.create_wash_bag_for_receipt(
 	re_id numeric,
 	curr_user numeric,
@@ -821,6 +825,7 @@ CREATE OR REPLACE FUNCTION public.create_wash_bag_for_receipt(
 	wb wash_bag_detail[])
     RETURNS receipt
     LANGUAGE 'plpgsql'
+
     COST 100
     VOLATILE 
 AS $BODY$
@@ -853,32 +858,71 @@ end;
 
 $BODY$;
 
-ALTER FUNCTION public.create_wash_bag_for_receipt(
-	re_id numeric,
-	curr_user numeric,
-	wash_code numeric[],
-	wb wash_bag_detail[])
+ALTER FUNCTION public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[])
     OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(numeric, numeric, numeric[], wash_bag_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
+
+
+--
+-- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.assign_To_Wash(
 	re_id numeric,
 	curr_user numeric,
-	wash_code numeric[],
-	wb wash_bag_detail[]) TO postgres;
+	washer_id numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE 
+AS $BODY$
 
-GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+declare
+	wb_list wash_bag[];
+	i wash_bag;
+	r receipt;
+begin
+	select * into wb_list from wash_bag where receipt_id = re_id;
+	foreach i in array wb_list loop
+		insert into wash (wash_bag_id, washing_machine_id, create_by, update_by, status)
+		values (i.id,washer_id,curr_user,curr_user,'PENDING_SERVING');
+	end loop;
+	select * into r from receipt where id = re_id;
+	return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.assign_To_Wash(
 	re_id numeric,
 	curr_user numeric,
-	wash_code numeric[],
-	wb wash_bag_detail[]) TO PUBLIC;
+	washer_id numeric)
+    OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_wash_bag_for_receipt(
+GRANT EXECUTE ON FUNCTION public.assign_To_Wash(
 	re_id numeric,
 	curr_user numeric,
-	wash_code numeric[],
-	wb wash_bag_detail[]) TO auth_authenticated WITH GRANT OPTION;
+	washer_id numeric) TO postgres;
 
+GRANT EXECUTE ON FUNCTION public.assign_To_Wash(
+	re_id numeric,
+	curr_user numeric,
+	washer_id numeric) TO PUBLIC;
 
+GRANT EXECUTE ON FUNCTION public.assign_To_Wash(
+	re_id numeric,
+	curr_user numeric,
+	washer_id numeric) TO auth_authenticated WITH GRANT OPTION;
+
+----------------------
+GRANT ALL ON SEQUENCE public.wash_seq TO auth_authenticated;
 
 
 
