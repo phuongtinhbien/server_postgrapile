@@ -1107,7 +1107,7 @@ AS $BODY$
 	and service_type_id = unitPrice.service_type_id 
 	and unit_id = unitPrice.unit_id
 	and apply_date = (select max(apply_date) from unit_price
-	where product_id = unitPrice.product_id
+	where (product_id = unitPrice.product_id or unitPrice.product_id is null)
 	and service_type_id = unitPrice.service_type_id 
 	and unit_id = unitPrice.unit_id
 	and status = 'ACTIVE');
