@@ -1103,7 +1103,7 @@ AS $BODY$
 
     select *
 	from unit_price
-	where product_id = unitPrice.product_id
+	where (product_id = unitPrice.product_id or unitPrice.product_id is null)
 	and service_type_id = unitPrice.service_type_id 
 	and unit_id = unitPrice.unit_id
 	and apply_date = (select max(apply_date) from unit_price
@@ -1124,7 +1124,7 @@ ALTER FUNCTION public.getproductprice(unit_price)
 
 CREATE OR REPLACE FUNCTION public.getlistproductprice(
 	unitprice unit_price[])
-    RETURNS unit_price
+    RETURNS unit_price[]
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -1148,6 +1148,143 @@ end;
 $BODY$;
 
 ALTER FUNCTION public.getlistproductprice(unit_price[])
+    OWNER TO postgres;
+
+
+
+--GRANT QUYỀN
+REVOKE ALL ON TABLE public.wash_bag_detail FROM auth_authenticated;
+GRANT DELETE ON TABLE public.wash_bag_detail TO auth_authenticated;
+
+GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.wash_bag_detail TO auth_authenticated WITH GRANT OPTION;
+
+REVOKE ALL ON TABLE public.wash_bag FROM auth_authenticated;
+GRANT DELETE ON TABLE public.wash_bag TO auth_authenticated;
+
+GRANT INSERT, SELECT, UPDATE, REFERENCES, TRIGGER ON TABLE public.wash_bag TO auth_authenticated WITH GRANT OPTION;
+
+-- FUNCTION: public.assign_auto_to_wash(numeric, numeric)
+
+-- DROP FUNCTION public.assign_auto_to_wash(numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.assign_auto_to_wash(
+	br_id numeric,
+	curr_user numeric)
+    RETURNS boolean
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	success boolean = false;
+	re_id numeric[];
+	service_type_list numeric[];
+	color_group_list numeric[];
+	new_wb_id numeric;
+	i_re numeric;
+	i_sv numeric;
+	item_rd_sv numeric[];
+	i_rd_sv numeric;
+	item_rd_cl numeric[];
+	i_rd_cl numeric;
+	coun integer;
+begin
+	re_id = ARRAY(select re.id from receipt re inner join customer_order co on co.id = re.order_id where co.branch_id =  br_id and co.status = 'PENDING_SERVING');
+	foreach i_re in array re_id loop
+		begin
+			select count(*) into coun from wash_bag where receipt_id = i_re;
+			if coun = 0 then 
+			begin
+			service_type_list = ARRAY (select distinct service_type_id from receipt_detail where receipt_id = i_re);
+			foreach i_sv in array service_type_list loop
+				begin
+					color_group_list = ARRAY(select distinct cg.id from receipt_detail rd 
+											 inner join color cl on rd.color_id = cl.id
+											 inner join color_group cg on cg.id = cl.color_group_id
+											 where receipt_id = i_re and service_type_id = i_sv 
+											 and rd.id in (select receipt_detail.id from receipt_detail where receipt_detail.receipt_id = i_re and receipt_detail.service_type_id = i_sv ));
+					foreach i_rd_cl in array color_group_list loop
+					begin
+						new_wb_id = nextVal('wash_bag_seq');
+						insert into wash_bag (id, wash_bag_name, create_by, update_by, status, receipt_id)
+						values (new_wb_id, 'WB_'||new_wb_id, curr_user,curr_user, 'ACTIVE',i_re );
+						
+						insert into wash_bag_detail (wash_bag_id, service_type_id, unit_id, label_id, color_id, product_id,
+													material_id, amount, create_by, update_by, status)
+						select new_wb_id, i_sv, rd.unit_id, rd.label_id,rd.color_id, rd.product_id,rd.material_id,
+						 rd.amount, curr_user, curr_user, 'ACTIVE' from receipt_detail rd
+						 inner join color cl on rd.color_id = cl.id
+						 inner join color_group cg on cg.id = cl.color_group_id
+						 and cg.id = i_rd_cl
+						 and rd.id in (select receipt_detail.id from receipt_detail where receipt_detail.receipt_id = i_re and receipt_detail.service_type_id = i_sv);
+					end;
+					end loop;
+				 
+				end;
+			end loop;
+		end; end if;
+		end;
+														  
+	end loop;
+	return success = true;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.assign_auto_to_wash(numeric, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_auto_to_wash(numeric, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_auto_to_wash(numeric, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.assign_auto_to_wash(numeric, numeric) TO auth_authenticated WITH GRANT OPTION;
+
+
+--09/11/2018
+
+-- FUNCTION: public.get_info_washer(numeric)
+
+-- DROP FUNCTION public.get_info_washer(numeric);
+
+-- FUNCTION: public.get_info_washer(numeric)
+
+-- DROP FUNCTION public.get_info_washer(numeric);
+
+CREATE OR REPLACE FUNCTION public.get_info_washer(
+	br_id numeric)
+    RETURNS SETOF info_washer 
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+    ROWS 1000
+AS $BODY$
+
+	select wa.id,
+	(select count (*) from (select distinct re.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('PENDING_SERVING','SERVING') and wm.id= wa.id ) sumcount ) as sumCount ,
+	wa.washer_code,
+	ARRAY(select distinct co.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('SERVING') and wm.id= wa.id ) as serving,
+	ARRAY(select distinct co.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('PENDING_SERVING') and wm.id= wa.id ) as pending
+	 from washing_machine wa where  wa.branch_id = br_id;
+
+$BODY$;
+
+ALTER FUNCTION public.get_info_washer(numeric)
     OWNER TO postgres;
 
 
