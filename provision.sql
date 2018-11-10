@@ -1376,3 +1376,44 @@ GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO auth_authenticated;
 
+
+--11/11/2018
+
+-- FUNCTION: public.get_info_washer(numeric)
+
+-- DROP FUNCTION public.get_info_washer(numeric);
+
+CREATE OR REPLACE FUNCTION public.get_info_washer(
+	br_id numeric)
+    RETURNS SETOF info_washer 
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+    ROWS 1000
+AS $BODY$
+
+	select wa.id,
+	(select count (*) from (select distinct re.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('PENDING_SERVING','SERVING') and wm.id= wa.id ) sumcount ) as sumCount ,
+	wa.washer_code,
+	ARRAY(select distinct co.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('SERVING') and wm.id= wa.id ) as serving,
+	ARRAY(select distinct co.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('PENDING_SERVING') and wm.id= wa.id ) as pending
+	 from washing_machine wa where  wa.branch_id = br_id and wa.status = 'ACTIVE';
+
+$BODY$;
+
+ALTER FUNCTION public.get_info_washer(numeric)
+    OWNER TO postgres;
+
