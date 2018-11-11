@@ -1417,3 +1417,44 @@ $BODY$;
 ALTER FUNCTION public.get_info_washer(numeric)
     OWNER TO postgres;
 
+-- FUNCTION: public.assign_type_one_to_wash()
+
+-- DROP FUNCTION public.assign_type_one_to_wash(assign_work[]);
+
+CREATE OR REPLACE FUNCTION public.assign_type_one_to_wash(
+	list assign_work[])
+    RETURNS boolean
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	i assign_work;
+	success boolean = false;
+begin
+	foreach i in array list loop
+	begin
+		perform assign_to_wash (i.re_id, i.curr_user,i.washer_id);
+		success = true;
+	end;
+	end loop;
+	return success;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.assign_type_one_to_wash(
+	list assign_work[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_type_one_to_wash(
+	list assign_work[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_type_one_to_wash(
+	list assign_work[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.assign_type_one_to_wash(
+	list assign_work[]) TO auth_authenticated WITH GRANT OPTION;
+
