@@ -1492,3 +1492,53 @@ GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO auth_authenticated;
 
+-- FUNCTION: public.generate_bill(numeric, numeric)
+
+-- DROP FUNCTION public.generate_bill(numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.generate_bill(
+	co_id numeric,
+	curr_user numeric)
+    RETURNS bill
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  re receipt;
+  rd receipt_detail;
+  new_bill_id numeric;
+  wb_id numeric[];
+  co customer_order;
+  res bill;
+begin
+	select * into co from customer_order where id = co_id;
+	select * into re from receipt where order_id = co.id;
+	new_bill_id = nextVal('bill_seq');
+	
+	insert into bill (id, receipt_id, create_by, update_by, status)
+	values (new_bill_id, re.id,curr_user,curr_user,'PENDING_PAYING');
+	
+	foreach rd in array ARRAY(select * from receipt_detail where receipt_id = re.id) loop
+	insert into bill_detai(bill_id, service_type_id, unit_id,unit_price, label_id, color_id, 
+						   product_id, material_id,amount, note, create_by, update_bay, status)
+	values (new_bill_id, rd.service_type_id, rd.unit_id, rd.unit_price, rd.label_id, rd.color_id, 
+			rd.product_id, rd.material_id,rd.recieved_amount, rd.note, curr_user,curr_user , 'PENDING_PAYING');
+	end loop;
+	select * into res from bill where receipt_id = re.id;
+  return res;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.generate_bill(numeric, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO auth_authenticated;
+
