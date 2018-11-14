@@ -1458,3 +1458,37 @@ GRANT EXECUTE ON FUNCTION public.assign_type_one_to_wash(
 GRANT EXECUTE ON FUNCTION public.assign_type_one_to_wash(
 	list assign_work[]) TO auth_authenticated WITH GRANT OPTION;
 
+
+--14/11/2018
+-- FUNCTION: public.wash_search(numeric)
+
+-- DROP FUNCTION public.wash_search(numeric);
+
+CREATE OR REPLACE FUNCTION public.wash_search(
+	br_id numeric)
+    RETURNS SETOF wash_search 
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+    ROWS 1000
+AS $BODY$
+
+    select co.id , re.id, wb.wash_bag_name, wm.washer_code, w.status,cu.full_name,w.sn  from wash w inner join wash_bag wb on wb.id = w.wash_bag_id
+	inner join washing_machine wm on w.washing_machine_id = wm.id
+	inner join receipt re on wb.receipt_id = re.id
+	inner join customer_order co on re.order_id = co.id
+	inner join customer cu on cu.id = co.customer_id
+	where w.status in ('PENDING_SERVING','SERVING', 'FINISHED_SERVING') and co.branch_id = br_id
+
+$BODY$;
+
+ALTER FUNCTION public.wash_search(numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.wash_search(numeric) TO auth_authenticated;
+
