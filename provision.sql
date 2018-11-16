@@ -1542,3 +1542,104 @@ GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO auth_authenticated;
 
+--16/11/2018
+-- FUNCTION: public.updatereceiptanddetail(receipt, receipt_detail[])
+
+-- DROP FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]);
+
+CREATE OR REPLACE FUNCTION public.updatereceiptanddetail(
+	p_re receipt,
+	rd receipt_detail[])
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  i receipt_detail;
+  r receipt;
+begin
+	select re.* into r from receipt re where re.id = p_re.id;
+
+	update receipt set (pick_up_time, delivery_time, update_by, update_date,  pick_up_date,
+					   delivery_date, pick_up_place, delivery_place)
+	= (p_re.pick_up_time, p_re.delivery_time, p_re.update_by, p_re.update_date,  p_re.pick_up_date,
+					   p_re.delivery_date, p_re.pick_up_place, p_re.delivery_place);			   
+
+	select re.* into r from receipt re where re.id = p_re.id;
+  	foreach i in array rd loop
+		i.update_date = now();
+		update receipt_detail set (recieved_amount,delivery_amount,  update_by, update_date)
+		= (i.recieved_amount,i.delivery_amount, i.update_by,i.update_date) where id = i.id;
+  	end loop;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]) TO auth_authenticated;
+
+
+-- FUNCTION: public.updatestatusreceipt(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatusreceipt(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatusreceipt(
+	r_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	no_rec numeric;
+	r receipt;
+	r_status varchar;
+	r_task task;
+	branch numeric;
+begin
+	select re.* into r from receipt re where re.id = r_id;
+	select branch_id into branch from customer_order co inner join receipt re on re.order_id = co.id where re.id = r.id;
+	r_status := r.status;
+	select * into r_task from task where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update task set PREVIOUS_TASK = 'Y' where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update receipt set (status,update_date,update_by) = (p_status, now(),p_user) where id  = r_id;
+	update receipt_detail set (status,update_date,update_by) = (p_status, now(),p_user) where receipt_id  = r_id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, r_task.current_staff, 'TASK_RECEIPT', null,r.id , r_task.current_status, p_status,'N', branch);
+	select * into r from receipt  where id = r_id;
+	if r.status = 'RECEIVED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'PENDING_SERVING',p_user );
+	ELSIF r.status = 'DELIVERIED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'FINISHED',p_user );
+	end if;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatusreceipt(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
+
+
+
+
