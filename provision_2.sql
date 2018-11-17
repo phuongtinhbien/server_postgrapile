@@ -86,3 +86,86 @@ GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.generate_bill(numeric, numeric) TO auth_authenticated;
 
+--18/11/2018
+-- FUNCTION: public.sorted_order_list(numeric)
+
+-- DROP FUNCTION public.sorted_order_list(numeric);
+
+CREATE OR REPLACE FUNCTION public.sorted_order_list(
+	br_id numeric)
+    RETURNS SETOF customer_order 
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+    ROWS 1000
+AS $BODY$
+
+ select co.* from customer_order co
+	where co.branch_id = br_id  and co.status = 'PENDING_SERVING' 
+	and co.id not in (select distinct co.id from receipt re inner join customer_order co on co.id = re.order_id
+							inner join wash_bag wb on re.id = wb.receipt_id
+							left join wash w on w.wash_bag_id = wb.id
+							inner join washing_machine wm on wm.id = w.washing_machine_id
+							where co.branch_id =  2 and co.status in  ('PENDING_SERVING','SERVING') and wm.status ='ACTIVE')
+	order by co.delivery_date ASC, co.delivery_time_id ASC
+
+$BODY$;
+
+ALTER FUNCTION public.sorted_order_list(numeric)
+    OWNER TO postgres;
+-- FUNCTION: public.assign_to_wash(numeric, numeric, numeric)
+
+-- DROP FUNCTION public.assign_to_wash(numeric, numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.assign_to_wash(
+	re_id numeric,
+	curr_user numeric,
+	washer_id numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	wb_list numeric[];
+	i numeric;
+	r receipt;
+	coun numeric;
+	sn_max integer;
+begin
+	wb_list = ARRAY(select id from wash_bag where receipt_id = re_id);
+	select count(*) into coun from wash where wash_bag_id in (select id from wash_bag where receipt_id = re_id) and status != 'PENDING_SERVING';
+	if coun = 0 then
+	begin
+		delete from wash where wash_bag_id in (select id from wash_bag where receipt_id = re_id) and status = 'PENDING_SERVING';
+		select max(sn) into sn_max from wash where washing_machine_id = washer_id and status = 'PENDING_SERVING';
+		if sn_max is null then
+			sn_max = 0;
+		end if;
+		foreach i in array wb_list loop
+			insert into wash (wash_bag_id, washing_machine_id, create_by, update_by, status,sn)
+			values (i,washer_id,curr_user,curr_user,'PENDING_SERVING',sn_max + 1);
+		end loop;
+		select * into r from receipt where id = re_id;
+		return r;
+	end;
+	end if;
+	return null;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.assign_to_wash(numeric, numeric, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO auth_authenticated WITH GRANT OPTION;
+
+
+
