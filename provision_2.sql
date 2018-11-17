@@ -12,7 +12,7 @@ CREATE OR REPLACE FUNCTION public.get_min_time_for_handle(
     STABLE 
 AS $BODY$
 
-select case when date_part('hour', min_time.max_time_for_handle) > 17 or date_part('hour', min_time.max_time_for_handle)< 9
+select case when date_part('hour', min_time.max_time_for_handle) > 17 or date_part('hour', min_time.max_time_for_handle)< 6
 then
 	min_time.max_time_for_handle + interval '12 hours'
 else 
