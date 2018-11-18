@@ -169,3 +169,110 @@ GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO au
 
 
 
+--18/11/2018
+-- FUNCTION: public.updatestatusreceipt(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatusreceipt(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatusreceipt(
+	r_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	no_rec numeric;
+	r receipt;
+	r_status varchar;
+	r_task task;
+	branch numeric;
+begin
+	select re.* into r from receipt re where re.id = r_id;
+	select branch_id into branch from customer_order co inner join receipt re on re.order_id = co.id where re.id = r.id;
+	r_status := r.status;
+	select * into r_task from task where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update task set PREVIOUS_TASK = 'Y' where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update receipt set (status,update_date,update_by) = (p_status, now(),p_user) where id  = r_id;
+	update receipt_detail set (status,update_date,update_by) = (p_status, now(),p_user) where receipt_id  = r_id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, r_task.current_staff, 'TASK_RECEIPT', null,r.id , r_task.current_status, p_status,'N', branch);
+	select * into r from receipt  where id = r_id;
+	if r.status = 'RECEIVED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'PENDING_SERVING',p_user );
+	ELSIF r.status = 'DELIVERIED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'FINISHED',p_user );
+		update bill set status ='PAID' where receipt_id = r.id;
+		update bill_detail set status = 'PAID' where bill_id = (select id from bill where receipt_id = r.id);
+	end if;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatusreceipt(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
+
+-- FUNCTION: public.assign_to_wash(numeric, numeric, numeric)
+
+-- DROP FUNCTION public.assign_to_wash(numeric, numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.assign_to_wash(
+	re_id numeric,
+	curr_user numeric,
+	washer_id numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	wb_list numeric[];
+	i numeric;
+	r receipt;
+	coun numeric;
+	sn_max integer;
+begin
+	wb_list = ARRAY(select id from wash_bag where receipt_id = re_id);
+	select count(*) into coun from wash where wash_bag_id in (select id from wash_bag where receipt_id = re_id) and status != 'PENDING_SERVING';
+	if coun = 0 then
+	begin
+		delete from wash where wash_bag_id in (select id from wash_bag where receipt_id = re_id) and status = 'PENDING_SERVING';
+		select max(sn) into sn_max from wash where washing_machine_id = washer_id and status = 'PENDING_SERVING';
+		if sn_max is null then
+			sn_max = 0;
+		end if;
+		foreach i in array wb_list loop
+			insert into wash (wash_bag_id, washing_machine_id, create_by, update_by, status,sn)
+			values (i,washer_id,curr_user,curr_user,'PENDING_SERVING',sn_max + 1);
+		end loop;
+		select * into r from receipt where id = re_id;
+		return r;
+	end;
+	end if;
+	return null;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.assign_to_wash(numeric, numeric, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO auth_authenticated WITH GRANT OPTION;
+
