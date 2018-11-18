@@ -276,3 +276,54 @@ GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO PU
 
 GRANT EXECUTE ON FUNCTION public.assign_to_wash(numeric, numeric, numeric) TO auth_authenticated WITH GRANT OPTION;
 
+-- FUNCTION: public.updatereceiptanddetail(receipt, receipt_detail[])
+
+-- DROP FUNCTION public.updatereceiptanddetail(receipt, receipt_detail[]);
+
+CREATE OR REPLACE FUNCTION public.update_Amount_Bill(
+	p_b bill,
+	bd bill_detail[])
+    RETURNS bill
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  i bill_detail;
+  b bill;
+begin
+	select bi.* into b from bill bi where bi.id = p_b.id;
+
+	update bill set (update_by, update_date,status)
+	= (p_b.update_by, now(), 'UPDATED');			   
+
+	select bi.* into b from bill bi where bi.id = p_b.id;
+  	foreach i in array bd loop
+		i.update_date = now();
+		update bill_detail set (status,amount, update_by, update_date)
+		= ('UPDATED',i.amount,i.update_by,i.update_date) where id = i.id;
+  	end loop;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_Amount_Bill(
+	p_b bill,
+	bd bill_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_Amount_Bill(
+	p_b bill,
+	bd bill_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_Amount_Bill(
+	p_b bill,
+	bd bill_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_Amount_Bill(
+	p_b bill,
+	bd bill_detail[]) TO auth_authenticated;
+
