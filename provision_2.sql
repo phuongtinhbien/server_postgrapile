@@ -327,3 +327,59 @@ GRANT EXECUTE ON FUNCTION public.update_Amount_Bill(
 	p_b bill,
 	bd bill_detail[]) TO auth_authenticated;
 
+--19/12/2018
+ALTER FUNCTION public.update_wash(numeric, character varying, numeric)
+    RENAME TO update_status_wash;
+
+-- FUNCTION: public.assign_to_wash(numeric, numeric, numeric)
+
+-- DROP FUNCTION public.assign_to_wash(numeric, numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.update_serving_wash(
+	curr_user numeric,
+	washer_id numeric)
+    RETURNS washing_machine
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	wash washing_machine;
+	co_id numeric;
+begin
+	select distinct id into co_id from customer_order co 
+	inner join receipt re on re.id = co.id 
+	left join wash_bag wb on wb.receipt_id = re.id
+	left join wash w on w.wash_bag_id = wb.id
+	where w.washing_machine = washer_id and w.status = 'SERVING';
+	update wash set (update_by, status,update_date) = (curr_user, 'PENDING_SERVING', now())
+	where washing_machine_id = washer_id and status = 'SERVING';
+	
+	if co_id is not null then
+		PERFORM updatestatuscustomerorder (co_id, 'PENDING_SERVING',curr_user );
+	end if;
+	select * into wash where id = washer_id;
+	return wash;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_serving_wash(
+	curr_user numeric,
+	washer_id numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_serving_wash(
+	curr_user numeric,
+	washer_id numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_serving_wash(
+	curr_user numeric,
+	washer_id numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_serving_wash(
+	curr_user numeric,
+	washer_id numeric) TO auth_authenticated WITH GRANT OPTION;
+
