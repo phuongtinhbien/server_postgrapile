@@ -76,7 +76,7 @@ app.use(function (req, res, next) {
 app.use(function (err, req, res, next) {
   res.send('Error! ', err.message, ' ', (req.app.get('env') === 'development' ? err : {}));
 });
-app.listen(5000,(err)=>{
+app.listen(process.env.PORT|| 5000,(err)=>{
     if (err)
       console.log(err);
     else
