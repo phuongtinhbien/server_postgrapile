@@ -450,5 +450,41 @@ GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying,
 
 GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
 
+--20/11/2018
+-- FUNCTION: public.get_min_time_for_handle(numeric)
+
+-- DROP FUNCTION public.get_min_time_for_handle(numeric);
+
+CREATE OR REPLACE FUNCTION public.get_min_time_for_handle(
+	br_id numeric)
+    RETURNS timestamp without time zone
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+AS $BODY$
+
+select case when date_part('hour', min_time.max_time_for_handle) > (select value_key::INTEGER from env_var where key_name = 'TIME_END')
+or date_part('hour', min_time.max_time_for_handle)< (select value_key::INTEGER from env_var where key_name = 'TIME_START')
+then
+	min_time.max_time_for_handle + interval '12 hours'
+else 
+	min_time.max_time_for_handle
+end
+as max_time_for_handle
+from 
+  (select case when min(sum) = 0 then
+		 	(LOCALTIMESTAMP + (select value_key::INTERVAL as process_time from env_var where key_name = 'TIME_PROCESS'))
+			else
+				(LOCALTIMESTAMP + min(sum) * (select value_key::INTERVAL as process_time from env_var where key_name = 'TIME_PROCESS') + 
+				(select value_key::INTERVAL as process_time from env_var where key_name = 'TIME_PROCESS'))
+			end
+  as max_time_for_handle from get_info_washer(2) )as min_time
+$BODY$;
+
+ALTER FUNCTION public.get_min_time_for_handle(numeric)
+    OWNER TO postgres;
+
+
 
 
