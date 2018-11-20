@@ -391,3 +391,64 @@ GRANT EXECUTE ON FUNCTION public.update_serving_wash(
 	washer_id numeric) TO auth_authenticated WITH GRANT OPTION;
 
 
+-- FUNCTION: public.updatestatusreceipt(numeric, character varying, numeric)
+
+-- DROP FUNCTION public.updatestatusreceipt(numeric, character varying, numeric);
+
+CREATE OR REPLACE FUNCTION public.updatestatusreceipt(
+	r_id numeric,
+	p_status character varying,
+	p_user numeric)
+    RETURNS receipt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	no_rec numeric;
+	r receipt;
+	r_status varchar;
+	r_task task;
+	branch numeric;
+	washer_list info_washer;
+begin
+	select re.* into r from receipt re where re.id = r_id;
+	select branch_id into branch from customer_order co inner join receipt re on re.order_id = co.id where re.id = r.id;
+	r_status := r.status;
+	select * into r_task from task where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update task set PREVIOUS_TASK = 'Y' where task_type = 'TASK_RECEIPT' and receipt = r_id;
+	update receipt set (status,update_date,update_by) = (p_status, now(),p_user) where id  = r_id;
+	update receipt_detail set (status,update_date,update_by) = (p_status, now(),p_user) where receipt_id  = r_id;
+	insert into task (current_staff, previous_staff, task_type, customer_order, receipt, previous_status, current_status,PREVIOUS_TASK, branch_id)
+		values (p_user, r_task.current_staff, 'TASK_RECEIPT', null,r.id , r_task.current_status, p_status,'N', branch);
+	select * into r from receipt  where id = r_id;
+	if r.status = 'RECEIVED' then
+	begin
+		PERFORM  updatestatuscustomerorder (r.order_id,'PENDING_SERVING',p_user );
+		PERFORM assign_auto_wash (branch, r.create_by);
+		select * into washer_list from get_info_washer(branch) where sum = (select min(sum) from get_info_washer(branch));
+		PERFORM assign_to_wash (r.id, r.create_by, washer_list.id);
+	end;
+	ELSIF r.status = 'DELIVERIED' then
+		PERFORM  updatestatuscustomerorder (r.order_id,'FINISHED',p_user );
+		update bill set status ='PAID' where receipt_id = r.id;
+		update bill_detail set status = 'PAID' where bill_id = (select id from bill where receipt_id = r.id);
+	end if;
+  return r;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.updatestatusreceipt(numeric, character varying, numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.updatestatusreceipt(numeric, character varying, numeric) TO auth_authenticated;
+
+
+
