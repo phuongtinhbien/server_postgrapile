@@ -486,5 +486,34 @@ ALTER FUNCTION public.get_min_time_for_handle(numeric)
     OWNER TO postgres;
 
 
+--23/11/2018
+-- FUNCTION: public.searchcustomerorders(character varying, numeric, numeric)
+
+-- DROP FUNCTION public.searchcustomerorders(character varying, numeric, numeric);
+
+CREATE OR REPLACE FUNCTION public.searchcustomerorders(
+	customer_name character varying,
+	customer_order numeric,
+	branch numeric)
+    RETURNS SETOF customer_order 
+    LANGUAGE 'sql'
+
+    COST 100
+    VOLATILE 
+    ROWS 1000
+AS $BODY$
+
+	select co.* from customer_order co left join customer cus on cus.id = co.customer_id
+	where (unaccent(UPPER(cus.full_name)) ilike  '%'||unaccent(UPPER(customer_name))||'%' or customer_name is null)
+	and ( co.id = customer_order or customer_order is null)
+	and co.branch_id = branch;
+
+ 
+$BODY$;
+
+ALTER FUNCTION public.searchcustomerorders(character varying, numeric, numeric)
+    OWNER TO postgres;
+
+
 
 
