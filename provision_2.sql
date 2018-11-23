@@ -515,5 +515,130 @@ ALTER FUNCTION public.searchcustomerorders(character varying, numeric, numeric)
     OWNER TO postgres;
 
 
+--24/11/2018
+-- FUNCTION: auth_public.register_user(text, text, text, text, text)
+
+-- DROP FUNCTION auth_public.register_user(text, text, text, text, text);
+
+CREATE OR REPLACE FUNCTION auth_public.register_user(
+	first_name text,
+	last_name text,
+	email text,
+	user_type text,
+	password text)
+    RETURNS auth_public."user"
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE STRICT SECURITY DEFINER 
+AS $BODY$
+ 
+DECLARE 
+  new_user auth_public.user;
+  avai_user Integer; 
+BEGIN
+
+    if user_type = 'customer_type'
+            then
+        SELECT a.id INTO avai_user  FROM public.customer as a  WHERE a.email = $3;        
+        ELSEIF user_type = 'staff_type' then 
+        SELECT a.id INTO avai_user  FROM public.staff as a  WHERE a.email = $3;  
+    end if;
+	if user_type = 'admin' then
+	select a.id into avai_user from public.admin_account as a where a.username = $3;
+	end if;
+
+    if avai_user is null then
+    INSERT INTO auth_public.user (first_name, last_name,user_type) values 
+        (first_name, last_name,user_type) 
+        returning * INTO new_user; 
+        if user_type = 'customer_type'
+            then
+                INSERT INTO public.customer (id, email, password) values (new_user.id, email, crypt(password, gen_salt('bf')));
+        ELSEIF user_type = 'staff_type'
+            then INSERT INTO public.staff (id, email, password) values (new_user.id, email, crypt(password, gen_salt('bf')));
+		elseif user_type = 'admin' then
+			INSERT INTO public.admin_account (id, username, full_name,password) values (new_user.id, email,last_name || ' ' || first_name, crypt(password, gen_salt('bf')));
+        end if;
+    end if;
+	
+    if new_user is not null then
+        return new_user;
+    else
+        return null;
+    end if; 
+END; 
+
+$BODY$;
+
+ALTER FUNCTION auth_public.register_user(text, text, text, text, text)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION auth_public.register_user(text, text, text, text, text) TO postgres;
+
+GRANT EXECUTE ON FUNCTION auth_public.register_user(text, text, text, text, text) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION auth_public.register_user(text, text, text, text, text) TO auth_authenticated;
+
+GRANT EXECUTE ON FUNCTION auth_public.register_user(text, text, text, text, text) TO auth_anonymous;
+
+-- FUNCTION: auth_public.authenticate(text, text, text)
+
+-- DROP FUNCTION auth_public.authenticate(text, text, text);
+
+CREATE OR REPLACE FUNCTION auth_public.authenticate(
+	email text,
+	password text,
+	user_type text)
+    RETURNS auth_public.jwt
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE STRICT SECURITY DEFINER 
+AS $BODY$
+ 
+DECLARE 
+  account public.customer; 
+  ad public.admin_account;
+BEGIN
+    if user_type = 'customer_type' then
+        SELECT a.* INTO account 
+        FROM public.customer as a 
+        WHERE a.email = $1;
+    elseif user_type= 'staff_type' then
+        SELECT a.* INTO account 
+        FROM public.staff as a 
+        WHERE a.email = $1;
+	elseif user_type= 'admin'
+	then 
+	begin
+		select a.* into ad from public.admin_account as a where a.username = $1;
+		if ad.password = crypt(password,ad.password) then
+			return ('auth_authenticated', ad.id,user_type )::auth_public.jwt; 
+		end if;
+	end;
+    end if;
+	  if account.password = crypt(password, account.password) then 
+		return ('auth_authenticated', account.id,user_type )::auth_public.jwt; 
+	  else 
+		return null; 
+	  end if; 
+END; 
+
+$BODY$;
+
+ALTER FUNCTION auth_public.authenticate(text, text, text)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO postgres;
+
+GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO auth_authenticated;
+
+GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO auth_anonymous;
+
+
+
 
 
