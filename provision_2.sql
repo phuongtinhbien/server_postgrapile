@@ -649,8 +649,14 @@ $service_tmp$ LANGUAGE plpgsql;
 CREATE TRIGGER update_trigger AFTER UPDATE ON service_type
 FOR EACH ROW EXECUTE PROCEDURE updateServiceBranch();
 
-CREATE TRIGGER update_branch_trigger AFTER UPDATE ON branch
-FOR EACH ROW EXECUTE PROCEDURE updateServiceBranch();
+CREATE OR REPLACE FUNCTION updatebranchServiceBranch() RETURNS TRIGGER AS $branch_tmp$
+   BEGIN
+     update service_type_branch set status = NEW.status where branch_id = NEW.id;
+      RETURN NEW;
+   END;
+$branch_tmp$ LANGUAGE plpgsql;
 
+CREATE TRIGGER update_branch_trigger AFTER UPDATE ON branch
+FOR EACH ROW EXECUTE PROCEDURE updatebranchServiceBranch();
 
 
