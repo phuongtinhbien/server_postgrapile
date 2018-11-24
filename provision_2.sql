@@ -638,7 +638,16 @@ GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO auth_aut
 
 GRANT EXECUTE ON FUNCTION auth_public.authenticate(text, text, text) TO auth_anonymous;
 
+--25/11/2018
+CREATE OR REPLACE FUNCTION updateServiceBranch() RETURNS TRIGGER AS $service_tmp$
+   BEGIN
+     update service_type_branch set status = NEW.status where service_type_id = NEW.id;
+      RETURN NEW;
+   END;
+$service_tmp$ LANGUAGE plpgsql;
 
+CREATE TRIGGER update_trigger AFTER UPDATE ON service_type
+FOR EACH ROW EXECUTE PROCEDURE updateServiceBranch();
 
 
 
