@@ -670,3 +670,14 @@ $promotion_tmp$ LANGUAGE plpgsql;
 CREATE TRIGGER update_promotion_branch_trigger AFTER UPDATE ON branch
 FOR EACH ROW EXECUTE PROCEDURE updatePromotionBranch();
 
+--------------------------------------------
+CREATE OR REPLACE FUNCTION updatePromotion() RETURNS TRIGGER AS $promotion_tmp$
+   BEGIN
+     update promotion_branch set status = NEW.status where promotion_id = NEW.id;
+      RETURN NEW;
+   END;
+$promotion_tmp$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_promotion_trigger AFTER UPDATE ON promotion
+FOR EACH ROW EXECUTE PROCEDURE updatePromotion();
+
