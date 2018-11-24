@@ -681,3 +681,68 @@ $promotion_tmp$ LANGUAGE plpgsql;
 CREATE TRIGGER update_promotion_trigger AFTER UPDATE ON promotion
 FOR EACH ROW EXECUTE PROCEDURE updatePromotion();
 
+--------------------
+-- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.create_new_branch(
+	b branch,
+	service_type numeric[],
+	staff_one numeric[],
+	staff_two numeric[],
+	staff_three numeric[])
+    RETURNS branch
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  bra branch;
+  i numeric;
+begin
+  i = nextval('branch_seq');
+  b.id = i;
+  insert into branch values (b.*);
+	update staff set branch_id = i where id = ANY(staff_one);
+	update staff set branch_id = i where id = ANY(staff_two);
+	update staff set branch_id = i where id = ANY(staff_three);
+  select * into bra from branch where id = i;
+  return bra;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.create_new_branch(
+	b branch,
+	service_type numeric[],
+	staff_one numeric[],
+	staff_two numeric[],
+	staff_three numeric[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_new_branch(
+	b branch,
+	service_type numeric[],
+	staff_one numeric[],
+	staff_two numeric[],
+	staff_three numeric[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_new_branch(
+	b branch,
+	service_type numeric[],
+	staff_one numeric[],
+	staff_two numeric[],
+	staff_three numeric[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_new_branch(
+	b branch,
+	service_type numeric[],
+	staff_one numeric[],
+	staff_two numeric[],
+	staff_three numeric[]) TO auth_authenticated WITH GRANT OPTION;
+
+
+
