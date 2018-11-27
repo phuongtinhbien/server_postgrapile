@@ -682,9 +682,9 @@ CREATE TRIGGER update_promotion_trigger AFTER UPDATE ON promotion
 FOR EACH ROW EXECUTE PROCEDURE updatePromotion();
 
 --------------------
--- FUNCTION: public.create_order_and_detail(customer_order, order_detail[])
+-- FUNCTION: public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[])
 
--- DROP FUNCTION public.create_order_and_detail(customer_order, order_detail[]);
+-- DROP FUNCTION public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[]);
 
 CREATE OR REPLACE FUNCTION public.create_new_branch(
 	b branch,
@@ -702,10 +702,16 @@ AS $BODY$
 declare
   bra branch;
   i numeric;
+  ser numeric;
 begin
   i = nextval('branch_seq');
   b.id = i;
   insert into branch values (b.*);
+  foreach ser in array service_type loop
+  insert into service_branch (service_type_id, branch_id, status)
+  values (ser, i, 'ACTIVE');
+  end loop;
+  
 	update staff set branch_id = i where id = ANY(staff_one);
 	update staff set branch_id = i where id = ANY(staff_two);
 	update staff set branch_id = i where id = ANY(staff_three);
@@ -715,34 +721,52 @@ end;
 
 $BODY$;
 
-ALTER FUNCTION public.create_new_branch(
-	b branch,
-	service_type numeric[],
-	staff_one numeric[],
-	staff_two numeric[],
-	staff_three numeric[])
+ALTER FUNCTION public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[])
     OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_new_branch(
-	b branch,
-	service_type numeric[],
-	staff_one numeric[],
-	staff_two numeric[],
-	staff_three numeric[]) TO postgres;
+GRANT EXECUTE ON FUNCTION public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[]) TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.create_new_branch(
-	b branch,
-	service_type numeric[],
-	staff_one numeric[],
-	staff_two numeric[],
-	staff_three numeric[]) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[]) TO PUBLIC;
 
-GRANT EXECUTE ON FUNCTION public.create_new_branch(
-	b branch,
-	service_type numeric[],
-	staff_one numeric[],
-	staff_two numeric[],
-	staff_three numeric[]) TO auth_authenticated WITH GRANT OPTION;
+GRANT EXECUTE ON FUNCTION public.create_new_branch(branch, numeric[], numeric[], numeric[], numeric[]) TO auth_authenticated WITH GRANT OPTION;
 
 
+
+
+
+--27/11/2018
+-- FUNCTION: public.get_notification_customer(numeric)
+
+-- DROP FUNCTION public.get_notification_customer(numeric);
+
+CREATE OR REPLACE FUNCTION public.get_notification_customer(
+	cus_id numeric)
+    RETURNS SETOF task 
+    LANGUAGE 'sql'
+
+    COST 100
+    STABLE 
+    ROWS 1000
+AS $BODY$
+
+	select a.* from (
+        (select t.* from task t inner join customer_order co on co.id = t.customer_order
+        inner join customer cu on cu.id = co.customer_id where t.task_type = 'TASK_CUSTOMER_ORDER' and cu.id= cus_id and t.previous_task = 'N')
+        UNION
+        (select t.* from task t inner join receipt re on t.receipt = re.id
+        inner join customer_order co on co.id = re.order_id
+        inner join customer cu on cu.id = co.customer_id where t.task_type = 'TASK_RECEIPT' and cu.id= cus_id and t.previous_task = 'N')
+    ) as a
+ 
+
+$BODY$;
+
+ALTER FUNCTION public.get_notification_customer(numeric)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.get_notification_customer(numeric) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.get_notification_customer(numeric) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.get_notification_customer(numeric) TO auth_authenticated;
 
