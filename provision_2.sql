@@ -819,3 +819,107 @@ GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_d
 
 GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
 
+--29/11/2018
+-- FUNCTION: public.update_service_type_and_unit_price(service_type, unit_price[])
+
+-- DROP FUNCTION public.update_service_type_and_unit_price(service_type, unit_price[]);
+
+CREATE OR REPLACE FUNCTION public.update_service_type_and_unit_price(
+	s service_type,
+	u unit_price[])
+    RETURNS service_type
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	st service_type;
+	i unit_price;
+begin
+	select * into st from service_type where id = s.id;
+	if st is null then
+	else
+	begin
+		delete from service_product where service_type_id = st.id;
+		update unit_price set status = 'DELETED' where service_type_id = st.id;
+		
+		  foreach i in array u loop
+			i.id = nextval('unit_price_seq');
+			i.service_type_id = st.id;
+			i.create_date = now();
+			i.update_date = now();
+			insert into unit_price values (i.*);
+			if i.product_id is null then
+			else
+			insert into service_product (product_id, service_type_id,status)
+			values (i.product_id, st.id,'ACTIVE' );
+			end if;
+		  end loop;
+	update service_type set (service_type_name, service_type_desc, status) = (s.service_type_name, s.service_type_desc, s.status) where id = st.id;
+		  return st;
+	end;
+	end if;
+  	return st;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_service_type_and_unit_price(service_type, unit_price[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_service_type_and_unit_price(service_type, unit_price[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_service_type_and_unit_price(service_type, unit_price[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_service_type_and_unit_price(service_type, unit_price[]) TO auth_authenticated WITH GRANT OPTION;
+
+-- FUNCTION: public.create_service_type_and_unit_price(service_type, unit_price[])
+
+-- DROP FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[]);
+
+CREATE OR REPLACE FUNCTION public.create_service_type_and_unit_price(
+	s service_type,
+	u unit_price[])
+    RETURNS service_type
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+  i unit_price;
+begin
+  s.id = nextval('service_type_seq');
+  s.create_date = now();
+  s.update_date = now();
+  insert into service_type values (s.*) returning * into s;
+  foreach i in array u loop
+    i.id = nextval('unit_price_seq');
+    i.service_type_id = s.id;
+	i.create_date = now();
+  	i.update_date = now();
+    insert into unit_price values (i.*);
+	
+	if i.product_id is null then
+	else
+	insert into service_product (product_id, service_type_id,status)
+	values (i.product_id, s.id,'ACTIVE' );
+	end if;
+  end loop;
+  return s;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[]) TO auth_authenticated WITH GRANT OPTION;
+
