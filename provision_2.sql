@@ -923,3 +923,57 @@ GRANT EXECUTE ON FUNCTION public.create_service_type_and_unit_price(service_type
 
 GRANT EXECUTE ON FUNCTION public.create_service_type_and_unit_price(service_type, unit_price[]) TO auth_authenticated WITH GRANT OPTION;
 
+
+
+--01/12/2018
+-- FUNCTION: public.update_order_and_detail(customer_order, order_detail[])
+
+-- DROP FUNCTION public.update_order_and_detail(customer_order, order_detail[]);
+
+CREATE OR REPLACE FUNCTION public.update_order_and_detail(
+	o customer_order,
+	d order_detail[])
+    RETURNS customer_order
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+AS $BODY$
+
+declare
+	co customer_order;
+  i order_detail;
+begin
+  select * into co from customer_order where id = o.id;
+  if co is null then
+	else
+	begin
+  		update customer_order set (update_by, update_date, pick_up_date, pick_up_time_id,
+								  delivery_date, delivery_time_id,status)
+								  = (o.update_by, o.update_date, o.pick_up_date, o.pick_up_time_id,
+								  o.delivery_date, o.delivery_time_id,o.status);
+		delete from order_detail where order_id = co.id;
+	  foreach i in array d loop
+		i.id = nextval('order_detail_seq');
+		i.order_id = o.id;
+		i.create_date = now();
+		i.update_date = now();
+		insert into order_detail values (i.*);
+	  end loop;
+	end;
+	end if;
+	select * into o from customer_order where id = co.id;
+  return o;
+end;
+
+$BODY$;
+
+ALTER FUNCTION public.update_order_and_detail(customer_order, order_detail[])
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
