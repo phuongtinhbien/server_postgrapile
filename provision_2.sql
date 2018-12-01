@@ -951,7 +951,7 @@ begin
   		update customer_order set (update_by, update_date, pick_up_date, pick_up_time_id,
 								  delivery_date, delivery_time_id,status)
 								  = (o.update_by, o.update_date, o.pick_up_date, o.pick_up_time_id,
-								  o.delivery_date, o.delivery_time_id,o.status);
+								  o.delivery_date, o.delivery_time_id,o.status) where id = co.id;
 		delete from order_detail where order_id = co.id;
 	  foreach i in array d loop
 		i.id = nextval('order_detail_seq');
@@ -976,4 +976,6 @@ GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_d
 GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.update_order_and_detail(customer_order, order_detail[]) TO auth_authenticated WITH GRANT OPTION;
+
+
 
